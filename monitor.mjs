@@ -14,9 +14,9 @@ export function parseSnapshot(observation) {
   for (const line of snapshot.split('\n')) {
     const h=line.match(/^\s*- heading "(.+)" \[level=3\]/);
     if(h) { facility=h[1]; date=''; room=''; }
-    const d=line.match(/^\s*- (?:generic|text): "?(\d{4})年\s*(\d+)月(\d+)日/);
+    const d=line.match(/^\s*- (?:generic|text): .*?(\d{4})年\s*(\d+)月(\d+)日/);
     if(d) { date=`${d[1]}-${d[2].padStart(2,'0')}-${d[3].padStart(2,'0')}`; room=''; }
-    const r=line.match(/^\s*- (?:generic|text): .*?((?:集会室兼体育室|体育室|アリーナ).*?)(?=\s*定員|$)/);
+    const r=line.match(/^\s*- (?:generic|text): .*?(集会室兼体育室|体育室|アリーナ(?:\s*[１２12]\s*[／/]\s*[１２12]\s*[ＡＢAB])?)/);
     if(r) room=r[1].trim().replace(/"$/,'');
     const t=line.match(/^\s*- checkbox "(\d+)時から(\d+)時まで"/);
     if(!t) continue;

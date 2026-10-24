@@ -110,3 +110,7 @@ test('compact browser text retains date and room before time checkbox',()=>{
  const obs=fixture();obs.snapshot=obs.snapshot.replace('- generic: 2026年12月19日\n- generic: 集会室兼体育室','- text: 2026年12月19日 (土) 集会室兼体育室 定員200 名');
  const slots=candidates([obs],'2026-10-24');assert.equal(slots.length,1);assert.equal(slots[0].room,'集会室兼体育室');
 });
+test('real browser text may prepend previous slot status before the next date',()=>{
+ const obs=fixture('2026年11月20日');obs.snapshot+='\n- text: 12時から15時まで 2026年 11月21日 (土) 集会室兼体育室 清掃 清掃\n- checkbox "9時から12時まで"';obs.selectability.push(false);
+ const slots=candidates([obs],'2026-10-24');assert.equal(slots.length,1);assert.equal(slots[0].date,'2026-11-21');assert.equal(slots[0].room,'集会室兼体育室');
+});

@@ -25,7 +25,7 @@ export async function recoverHome(tab) {
   await ready(tab,'空き照会・申込');
 }
 
-export async function scanCategory(tab,{category,facilities,startDate,outputDirectory,categoryKey,maxBatches=1,resume=null,period='3ヶ月'}) {
+export async function scanCategory(tab,{category,facilities,startDate,outputDirectory,categoryKey,maxBatches=1,resume=null,period='3ヶ月',lastDate=null}) {
   if(!withinServiceHours())throw Error('SERVICE_CLOSED: outside 08:30–23:50 JST');
   if(!resume) {
   await ready(tab,'空き照会・申込');
@@ -58,7 +58,11 @@ export async function scanCategory(tab,{category,facilities,startDate,outputDire
   if(!resume) {
   for(let r=0;r<await rows.count();r++) {
     const statuses=await rows.nth(r).getByRole('checkbox').evaluateAll(es=>es.map(e=>({text:e.parentElement.textContent.trim(),disabled:e.disabled})));
-    statuses.forEach((s,i)=>{if(!s.disabled&&/^(空き|一部空き)$/.test(s.text))tasks.push({r,i});});
+    statuses.forEach((s,i)=>{
+      const day=new Date(startDate+'T00:00:00Z');day.setUTCDate(day.getUTCDate()+i);
+      if(lastDate&&day.toISOString().slice(0,10)>lastDate)return;
+      if(!s.disabled&&/^(空き|一部空き)$/.test(s.text))tasks.push({r,i});
+    });
   }
   }
   const observations=resume?.observations??[];

@@ -16,8 +16,10 @@ export async function collect({dir,env=process.env,smokeOnly=false}) {
   const observations=[],coverage=[],{starts,end}=periods(),today=jst().date;
   let context,page;
   async function fresh(){
+    if(!inHours(new Date()))throw Error('SERVICE_CLOSED');
     if(context)await context.close();
     context=await browser.newContext({locale:'ja-JP',timezoneId:'Asia/Tokyo'});
+    await context.route('https://www.pf-yoyaku.com/**',route=>inHours(new Date())?route.continue():route.abort('blockedbyclient'));
     page=await context.newPage();page.setDefaultTimeout(20000);
     page.on('dialog',async dialog=>{await dialog.dismiss();});
     await page.goto(HOME,{waitUntil:'domcontentloaded',timeout:30000});
@@ -33,7 +35,9 @@ export async function collect({dir,env=process.env,smokeOnly=false}) {
     for(const [key,name] of (smokeOnly?facilityOrder().slice(0,1):facilityOrder())) {
       let facilityComplete=true;
       for(let i=0;i<(smokeOnly?1:starts.length);i++) {
-        const options={category:key==='arena'?'市民体育館':'公民館',facilities:[name],startDate:starts[i],period:'1ヶ月',outputDirectory:dir,categoryKey:key+'-'+i,maxBatches:1};
+        const begin=new Date(starts[i]+'T00:00:00Z');
+        const lastDate=new Date(Date.UTC(begin.getUTCFullYear(),begin.getUTCMonth()+1,0)).toISOString().slice(0,10);
+        const options={category:key==='arena'?'市民体育館':'公民館',facilities:[name],startDate:starts[i],lastDate,period:'1ヶ月',outputDirectory:dir,categoryKey:key+'-'+i,maxBatches:1};
         let resume=null;
         try {
           // A fresh guest session for each month; there is never a second live tab.
@@ -50,6 +54,7 @@ export async function collect({dir,env=process.env,smokeOnly=false}) {
         }catch(e){
           if(resume)observations.push(...resume.observations);
           facilityComplete=false;
+          if(!inHours(new Date())||String(e.message).startsWith('SERVICE_CLOSED'))throw Object.assign(e,{partial:{observations,coverage}});
           if(recovered)throw Object.assign(e,{partial:{observations,coverage}});
           recovered=true;
           // Retry this month from scratch once, keeping previous observations.
