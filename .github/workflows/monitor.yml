@@ -6,6 +6,10 @@ on:
         description: 'One detail batch only, no slot notifications'
         type: boolean
         default: true
+      reprocess:
+        description: 'Reprocess recent saved observations; do not access the reservation site'
+        type: boolean
+        default: false
   schedule:
     - cron: '35 0-14,23 * * *'
 permissions:
@@ -26,6 +30,7 @@ jobs:
       STATE_KEY: ${{ secrets.STATE_KEY }}
       NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
       SMOKE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke && 'true' || 'false' }}
+      REPROCESS_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.reprocess && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -36,7 +41,7 @@ jobs:
       - name: Run offline verification
         run: npm test
       - name: Install Chromium
-        if: vars.MONITOR_ENABLED == 'true' && vars.CLOUD_BROWSER_APPROVED == 'true'
+        if: vars.MONITOR_ENABLED == 'true' && vars.CLOUD_BROWSER_APPROVED == 'true' && !inputs.reprocess
         run: npx playwright install --with-deps chromium
       - name: Check availability and notify
         run: npm start
