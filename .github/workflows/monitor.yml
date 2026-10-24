@@ -1,0 +1,42 @@
+name: Ageo free availability monitor
+on:
+  workflow_dispatch:
+    inputs:
+      smoke:
+        description: 'One detail batch only, no slot notifications'
+        type: boolean
+        default: true
+  schedule:
+    - cron: '35 0-14,23 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: ageo-monitor
+  cancel-in-progress: false
+jobs:
+  monitor:
+    if: github.event.repository.visibility == 'public'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      MONITOR_ENABLED: ${{ vars.MONITOR_ENABLED }}
+      CLOUD_BROWSER_APPROVED: ${{ vars.CLOUD_BROWSER_APPROVED }}
+      GITHUB_REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
+      GITHUB_TOKEN: ${{ github.token }}
+      STATE_KEY: ${{ secrets.STATE_KEY }}
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      SMOKE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install fixed dependencies
+        run: npm ci --ignore-scripts
+      - name: Run offline verification
+        run: npm test
+      - name: Install Chromium
+        if: vars.MONITOR_ENABLED == 'true' && vars.CLOUD_BROWSER_APPROVED == 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Check availability and notify
+        run: npm start
