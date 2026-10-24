@@ -31,7 +31,11 @@ export async function scanCategory(tab,{category,facilities,startDate,outputDire
   await ready(tab,'空き照会・申込');
   await tab.playwright.getByRole('button',{name:category,exact:true}).click();
   await ready(tab,'施設選択');
-  for(const name of facilities)await tab.playwright.getByRole('checkbox',{name,exact:true}).check();
+  for(const name of facilities){
+    const box=tab.playwright.getByRole('checkbox',{name,exact:true});
+    if(!await box.evaluate(e=>e.checked))await tab.playwright.getByText(name,{exact:true}).click();
+    if(!await box.evaluate(e=>e.checked))throw Error('FACILITY_SELECTION_NOT_CHECKED');
+  }
   await tab.playwright.getByRole('button',{name:'次へ進む',exact:true}).click();
   await ready(tab,'施設別空き状況');
   await tab.playwright.getByLabel('表示期間',{exact:true}).fill(startDate);

@@ -35,7 +35,9 @@ try{
  console.log(JSON.stringify({event:'completed',...result}));
 }catch(e){
  const fingerprint=String(e.message).split(':')[0].slice(0,100);
- state.health={status:'failed',fingerprint,lastSuccessful:previous?.status==='healthy'?previous:previous?.lastSuccessful};
+ let detail=String(e.message).slice(0,6000);
+ for(const value of [env.STATE_KEY,env.NTFY_TOPIC,env.GITHUB_TOKEN])if(value)detail=detail.replaceAll(value,'[redacted]');
+ state.health={status:'failed',fingerprint,detail,lastSuccessful:previous?.status==='healthy'?previous:previous?.lastSuccessful};
  if(e.partial)state.partial=e.partial;
  await save(state);
  if(!smokeOnly&&!state.outbox?.length){
@@ -43,5 +45,5 @@ try{
   catch{console.error('Failure notice could not be delivered.');}
  }
  // Failed checks keep previous availability and delivered history intact.
- console.error(JSON.stringify({event:'failed',fingerprint}));process.exitCode=1;
+ console.error(JSON.stringify({event:'failed',fingerprint,detail}));process.exitCode=1;
 }
