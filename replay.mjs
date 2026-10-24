@@ -1,0 +1,12 @@
+import fs from 'node:fs/promises';
+import {processInput} from './delivery.mjs';
+const [observationPath,historyPath]=process.argv.slice(2);
+if(!observationPath||!historyPath)throw Error('Usage: npm run replay -- OBSERVATIONS HISTORY');
+const raw=JSON.parse(await fs.readFile(observationPath,'utf8'));
+const history=JSON.parse(await fs.readFile(historyPath,'utf8'));
+const state={history,outbox:[]};let stored=structuredClone(state),sent=0;
+const push={send:async()=>({id:'offline-test-'+(++sent),accepted:true}),find:async()=>null};
+const today='2026-10-24';
+const first=await processInput({state,input:Array.isArray(raw)?{observations:raw,coverage:[]}:raw,today,save:async x=>{stored=structuredClone(x);},push});
+const second=await processInput({state:structuredClone(stored),input:Array.isArray(raw)?{observations:raw,coverage:[]}:raw,today,save:async x=>{stored=structuredClone(x);},push});
+console.log(JSON.stringify({mode:'offline-replay-no-network',first,second,notificationsSimulated:sent}));

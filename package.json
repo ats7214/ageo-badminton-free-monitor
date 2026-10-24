@@ -1,0 +1,16 @@
+{
+  "name": "ageo-free-monitor",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node run.mjs",
+    "test": "node --test free.test.mjs",
+    "replay": "node replay.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.64.0"
+  }
+}
