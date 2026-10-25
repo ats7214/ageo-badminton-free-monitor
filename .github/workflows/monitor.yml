@@ -11,7 +11,7 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: '35 0-14,23 * * *'
+    - cron: '0 0-14 * * *'
 permissions:
   contents: write
 concurrency:
