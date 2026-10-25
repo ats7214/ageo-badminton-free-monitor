@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import {GithubStore} from './github-store.mjs';
 import {unseal} from './vault.mjs';
 import {notifier} from './push.mjs';
+import {lineClient} from './line-push.mjs';
 import {flush,processInput,notice} from './delivery.mjs';
 import {collect} from './collector.mjs';
 import {inHours,jst} from './clock.mjs';
@@ -22,7 +23,11 @@ if((state.parserVersion??1)<2){
  if(state.outbox?.length)throw Error('MIGRATION_PENDING_DELIVERY');
  state.history=seed;state.parserVersion=2;state.needsCorrectionNotice=true;await store.save(state);
 }
-const save=value=>store.save(value),push=notifier({topic:env.NTFY_TOPIC});
+const provider=env.NOTIFICATION_PROVIDER||'ntfy';
+if(!['ntfy','line'].includes(provider))throw Error('UNKNOWN_NOTIFICATION_PROVIDER');
+const save=value=>store.save(value),push=provider==='line'
+ ?lineClient({token:env.LINE_CHANNEL_ACCESS_TOKEN,userId:env.LINE_USER_ID})
+ :notifier({topic:env.NTFY_TOPIC});
 const smokeOnly=!reprocessOnly&&env.SMOKE_ONLY==='true';
 if(!smokeOnly)await flush({state,save,push});
 const previous=state.health;
@@ -47,7 +52,7 @@ try{
 }catch(e){
  const fingerprint=String(e.message).split(':')[0].slice(0,100);
  let detail=String(e.message).slice(0,6000);
- for(const value of [env.STATE_KEY,env.NTFY_TOPIC,env.GITHUB_TOKEN])if(value)detail=detail.replaceAll(value,'[redacted]');
+ for(const value of [env.STATE_KEY,env.NTFY_TOPIC,env.GITHUB_TOKEN,env.LINE_CHANNEL_ACCESS_TOKEN,env.LINE_USER_ID])if(value)detail=detail.replaceAll(value,'[redacted]');
  state.health={status:'failed',fingerprint,detail,lastSuccessful:previous?.status==='healthy'?previous:previous?.lastSuccessful};
  if(e.partial)state.partial=e.partial;
  await save(state);

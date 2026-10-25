@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node run.mjs",
-    "test": "node --test free.test.mjs",
+    "test": "node --test free.test.mjs line.test.mjs",
     "replay": "node replay.mjs"
   },
   "dependencies": {

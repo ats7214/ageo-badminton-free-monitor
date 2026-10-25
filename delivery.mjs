@@ -22,17 +22,20 @@ export async function flush({state,save,push,now=new Date()}){
  if(state.quota?.date!==today)state.quota={date:today,count:0};
  for(const item of state.outbox??[]){
   if(item.status==='done')continue;
+  if(push.provider==='line'&&item.status!=='ready'&&!item.line)throw Error('PENDING_NTFY_DELIVERY_MUST_BE_RESOLVED');
+  if(push.provider!=='line'&&item.line)throw Error('PENDING_LINE_DELIVERY_MUST_BE_RESOLVED');
   let receipt;
   if(item.status==='accepted')receipt=item.receipt;
   else if(item.status==='sending'){
    // Reconcile the server cache; never blindly resend an ambiguous publication.
-   receipt=await push.find(item);
+   receipt=push.provider==='line'?await push.recover(item,item.line.firstAttemptAt):await push.find(item);
    if(!receipt?.id)throw Error('DELIVERY_UNCERTAIN_NEEDS_REVIEW');
   }else{
    if(state.quota.count>=200)throw Error('FREE_DAILY_NOTIFICATION_LIMIT');
+   if(push.provider==='line')push.prepare(item);
    item.status='sending';state.quota.count++;await save(state);
    try{receipt=await push.send(item);}
-   catch(e){if(e.definitelyRejected){item.status='ready';await save(state);}throw e;}
+   catch(e){if(e.definitelyRejected){item.status='ready';if(item.line)delete item.line;await save(state);}throw e;}
    if(!receipt?.id)throw Error('DELIVERY_NOT_CONFIRMED');
   }
   item.status='accepted';item.receipt=receipt;await save(state);
