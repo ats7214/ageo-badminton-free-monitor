@@ -5,6 +5,10 @@ const BASE='https://api.line.me/v2/bot';
 export const RESERVATION_URL='https://www.pf-yoyaku.com/User/ageo/Home';
 const uuid=/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
 const text=(value,extra={})=>({type:'text',text:String(value),wrap:true,...extra});
+export function reservationMemo(s){
+ const category=/市民体育館/.test(s.facility)?'市民体育館':'公民館';
+ return `${s.facility} ${s.room}\n${s.date} ${s.start}:00〜${s.end}:00\n操作：${category} → ${s.facility} → 表示期間 ${s.date}・1日 → ${s.room} → ${s.start}〜${s.end}時\n予約未確定・公式サイトで最新状況を確認`;
+}
 
 export function lineMessages(item){
  const slots=item.plan?.slots??[];
@@ -16,8 +20,13 @@ export function lineMessages(item){
   text(s.facility+' '+s.room,{weight:'bold'}),
   text(`${s.date} ${s.start}:00〜${s.end}:00`),
   text(`施設代目安：${s.facilityFee??'要確認'}${s.facilityFee==null?'':'円'}`),
-  text('6〜10人で利用予定／予約未確定・申込資格は要確認',{size:'sm',color:'#666666'})
- ]},footer:{type:'box',layout:'vertical',contents:[{type:'button',style:'primary',color:'#06C755',action:{type:'uri',label:'公式予約サイトで確認',uri:RESERVATION_URL}}]}}));
+  text('6〜10人で利用予定／予約未確定・申込資格は要確認',{size:'sm',color:'#666666'}),
+  text(`ログイン後：${/市民体育館/.test(s.facility)?'市民体育館':'公民館'} → ${s.facility}\n表示期間 ${s.date}・1日 → ${s.room} → ${s.start}〜${s.end}時`,{size:'sm',color:'#444444'})
+ ]},footer:{type:'box',layout:'vertical',spacing:'sm',contents:[
+  {type:'button',style:'primary',color:'#06C755',action:{type:'uri',label:'公式サイトを開く',uri:RESERVATION_URL}},
+  {type:'button',style:'secondary',action:{type:'clipboard',label:'施設・日時をコピー',clipboardText:reservationMemo(s)}},
+  {type:'button',style:'link',action:{type:'clipboard',label:'日付だけコピー',clipboardText:s.date}}
+ ]}}));
  // Full text preserves every slot; cards show only the first three examples.
  const first=slots[0];
  return [summary,{type:'flex',altText:`空き${slots.length}枠：${first.facility} ${first.date} ${first.start}時〜`.slice(0,400),
