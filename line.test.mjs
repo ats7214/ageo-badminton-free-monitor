@@ -14,6 +14,16 @@ test('all slots remain in text even when cards are capped at three',()=>{
  const m=lineMessages(i);assert.equal(m[0].text,i.title+'\n'+i.message);assert.equal(m[1].contents.contents.length,3);
 });
 test('notice without slots stays plain text',()=>assert.equal(lineMessages({...item(),plan:{slots:[]}}).length,1));
+
+test('production relay keeps exact slot without credentials or default-browser query',()=>{
+ const i=item(),slot=i.plan.slots[0];
+ const c=lineClient({token,userId,navigationAssist:true,safariRelay:true});c.prepare(i);
+ const action=i.line.body.messages[1].contents.footer.contents[0].action;
+ const u=new URL(action.uri);assert.equal(u.origin,'https://ats7214.github.io');
+ assert.equal(u.search,'');assert.equal(u.pathname,'/ageo-badminton-free-monitor/');
+ assert.deepEqual(JSON.parse(decodeURIComponent(u.hash.slice(1))),{v:1,f:slot.facility,r:slot.room,d:slot.date,s:slot.start,e:slot.end});
+ assert.equal(action.label,'この枠の申込画面へ');
+});
 test('card uses observed icons without guessing from selectability and removes manual route',()=>{
  assert.equal(availabilityLabel({availabilityIcon:'dist/images/icons.svg#circle'}),'○ 空きあり');
  assert.equal(availabilityLabel({availabilityIcon:'dist/images/icons.svg#triangle'}),'△ 施設に問い合わせ');

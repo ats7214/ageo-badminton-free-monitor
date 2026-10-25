@@ -24,7 +24,11 @@ export function assistedReservationUrl(s){
  const target={v:1,f:s.facility,r:s.room,d:s.date,s:s.start,e:s.end};
  return RESERVATION_URL+'?openExternalBrowser=1#ageo-slot='+encodeURIComponent(JSON.stringify(target));
 }
-export function lineMessages(item,{navigationAssist=false}={}){
+export function relayReservationUrl(s){
+ const target={v:1,f:s.facility,r:s.room,d:s.date,s:s.start,e:s.end};
+ return 'https://ats7214.github.io/ageo-badminton-free-monitor/#'+encodeURIComponent(JSON.stringify(target));
+}
+export function lineMessages(item,{navigationAssist=false,safariRelay=false}={}){
  const slots=item.plan?.slots??[];
  const summary={type:'text',text:(item.title+'\n'+item.message).slice(0,5000)};
  if((item.title+'\n'+item.message).length>5000)throw Error('LINE_TEXT_TOO_LONG');
@@ -38,7 +42,7 @@ export function lineMessages(item,{navigationAssist=false}={}){
   text(`施設代目安：${s.facilityFee??'要確認'}${s.facilityFee==null?'':'円'}`),
   text('6〜10人で利用予定／予約未確定・申込資格は要確認',{size:'sm',color:'#666666'})
  ]},footer:{type:'box',layout:'vertical',spacing:'sm',contents:[
-  {type:'button',style:'primary',color:'#06C755',action:{type:'uri',label:navigationAssist?'この枠の申込画面へ':'公式サイトを開く',uri:navigationAssist?assistedReservationUrl(s):RESERVATION_URL}}
+  {type:'button',style:'primary',color:'#06C755',action:{type:'uri',label:navigationAssist?'この枠の申込画面へ':'公式サイトを開く',uri:navigationAssist?(safariRelay?relayReservationUrl(s):assistedReservationUrl(s)):RESERVATION_URL}}
  ]}}));
  // Full text preserves every slot; cards show only the first three examples.
  const first=slots[0];
@@ -46,13 +50,13 @@ export function lineMessages(item,{navigationAssist=false}={}){
   contents:bubbles.length===1?bubbles[0]:{type:'carousel',contents:bubbles}}];
 }
 
-export function lineClient({token,userId,fetcher=fetch,now=()=>Date.now(),navigationAssist=false}){
+export function lineClient({token,userId,fetcher=fetch,now=()=>Date.now(),navigationAssist=false,safariRelay=false}){
  if(typeof token!=='string'||!token.trim()||/[\r\n]/.test(token))throw Error('LINE_TOKEN_REQUIRED');
  if(!/^U[a-f\d]{32}$/i.test(userId??''))throw Error('LINE_USER_ID_REQUIRED');
  const binding=crypto.createHash('sha256').update(userId).digest('hex');
  function prepare(item){
   if(item.line){if(item.line.binding!==binding||item.line.body.to!==userId||item.line.retryKey!==item.id)throw Error('LINE_PENDING_RECIPIENT_CHANGED');return;}
-  item.line={binding,retryKey:item.id,firstAttemptAt:new Date(now()).toISOString(),body:{to:userId,messages:lineMessages(item,{navigationAssist}),notificationDisabled:false}};
+  item.line={binding,retryKey:item.id,firstAttemptAt:new Date(now()).toISOString(),body:{to:userId,messages:lineMessages(item,{navigationAssist,safariRelay}),notificationDisabled:false}};
  }
  async function request(path,options={}){
   return fetcher(BASE+path,{...options,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',...options.headers},signal:AbortSignal.timeout(30000)});
@@ -77,7 +81,7 @@ export function lineClient({token,userId,fetcher=fetch,now=()=>Date.now(),naviga
  return {
   provider:'line',quota,prepare,
   async preflight(){const account=await jsonGet('/info');await jsonGet('/profile/'+userId);return {accountName:account.displayName,...await quota()};},
-  async validate(item){const r=await request('/message/validate/push',{method:'POST',body:JSON.stringify({messages:lineMessages(item,{navigationAssist})})});if(!r.ok)throw Error('LINE_VALIDATE_HTTP_'+r.status);return true;},
+  async validate(item){const r=await request('/message/validate/push',{method:'POST',body:JSON.stringify({messages:lineMessages(item,{navigationAssist,safariRelay})})});if(!r.ok)throw Error('LINE_VALIDATE_HTTP_'+r.status);return true;},
   async send(item){await quota();return post(item);},
   async recover(item,firstAttemptAt){
    const age=now()-Date.parse(firstAttemptAt);

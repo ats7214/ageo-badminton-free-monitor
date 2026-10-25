@@ -26,7 +26,7 @@ if((state.parserVersion??1)<2){
 const provider=env.NOTIFICATION_PROVIDER||'ntfy';
 if(!['ntfy','line'].includes(provider))throw Error('UNKNOWN_NOTIFICATION_PROVIDER');
 const save=value=>store.save(value),push=provider==='line'
- ?lineClient({token:env.LINE_CHANNEL_ACCESS_TOKEN,userId:env.LINE_USER_ID})
+ ?lineClient({token:env.LINE_CHANNEL_ACCESS_TOKEN,userId:env.LINE_USER_ID,navigationAssist:true,safariRelay:true})
  :notifier({topic:env.NTFY_TOPIC});
 const smokeOnly=!reprocessOnly&&env.SMOKE_ONLY==='true';
 if(!smokeOnly)await flush({state,save,push});
