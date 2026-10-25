@@ -33,7 +33,7 @@ export function lineMessages(item,{navigationAssist=false}={}){
   text('空き枠が見つかりました',{weight:'bold',color:'#06C755',size:'lg'}),
   text(s.facility+' '+s.room,{weight:'bold'}),
   text(`${s.date} ${s.start}:00〜${s.end}:00`),
-  text('予約状況：'+availabilityLabel(s),{weight:'bold',color:s.availabilityIcon?.endsWith('#circle')?'#08783E':'#805800'}),
+  text('この時間帯のコマ表示：'+availabilityLabel(s),{weight:'bold',color:s.availabilityIcon?.endsWith('#circle')?'#08783E':'#805800'}),
   text(observedLabel(s),{size:'sm',color:'#666666'}),
   text(`施設代目安：${s.facilityFee??'要確認'}${s.facilityFee==null?'':'円'}`),
   text('6〜10人で利用予定／予約未確定・申込資格は要確認',{size:'sm',color:'#666666'})

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         上尾バドミントン 予約画面アシスト
 // @namespace    ageo-badminton-free-monitor
-// @version      0.2.0
+// @version      0.3.0
 // @description  LINEの対象枠を画面で選び、申込内容入力で停止します。ログインと予約確定は本人操作です。
 // @match        https://www.pf-yoyaku.com/User/ageo/*
 // @run-at       document-idle
@@ -75,7 +75,7 @@
  const all=selector=>[...document.querySelectorAll(selector)].filter(visible);
  const exact=(selector,name)=>all(selector).filter(e=>normalize(e.textContent)===normalize(name));
  const button=name=>{const found=exact('button',name);if(found.length!==1||found[0].disabled)throw Error(`「${name}」を安全に選択できないため停止しました。`);return found[0];};
- const boxLabel=e=>e.closest('label')||e.parentElement;
+ const boxLabel=e=>e.closest('label')||(e.labels?.length===1?e.labels[0]:null)||e.parentElement;
  const chosen=e=>e.checked||boxLabel(e).classList.contains('active');
  const disabled=e=>e.disabled||boxLabel(e).classList.contains('disabled');
  function getView(){
@@ -115,7 +115,7 @@
   return {stage,boundary,login,error,loading,loggedOut:content.includes('現在ログインしていません'),facilitiesReady,date:dateInput?.value,oneDay:!!period?.checked,gridMatches,dayFound:!!row&&!!day,dayUnavailable:day?disabled(day):true,daySelected:day?chosen(day)&&selected.every(e=>e===day):false,exactTarget,timeCount:times.length,timeUnavailable:times.length===1?disabled(times[0]):true,timeSelected:times.length===1?chosen(times[0])&&selected.every(e=>e===times[0]):false,dom:{boxes,wanted,dateInput,period,row,day,time:times[0]}};
  }
  function clickLabel(e){if(!e||disabled(e))throw Error('対象項目を選択できないため停止しました。');boxLabel(e).click();}
- let busy=false,finished=false;
+ let busy=false,finished=false,firstUnknownAt=null;
  async function tick(){
   if(state.paused||finished||busy)return;
   busy=true;
@@ -123,7 +123,16 @@
    if(Date.now()-state.createdAt>TTL)throw Error('20分経過したため停止しました。LINEのカードから開き直してください。');
    const jp=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date());
    if(jp<'08:30'||jp>'23:50')throw Error('公式サイトの照会時間外のため停止しました。');
-   const v=getView(),a=plan(v,t);status.textContent=a.message;
+   const v=getView();
+   // Vue can briefly show a shell between document-idle and the real heading.
+   // Wait without clicking, but never keep an unknown page running indefinitely.
+   if(v.stage==='unknown'&&!v.boundary&&!v.login&&!v.error){
+    firstUnknownAt??=Date.now();
+    if(Date.now()-firstUnknownAt>15000)throw Error('対応画面の表示を確認できず停止しました。');
+    status.textContent='公式サイトの画面を確認しています。';return;
+   }
+   firstUnknownAt=null;
+   const a=plan(v,t);status.textContent=a.message;
    if(a.type==='done'||a.type==='stop'){finished=true;sessionStorage.removeItem(KEY);cancel.textContent='閉じる';cancel.onclick=()=>panel.remove();return;}
    if(a.type==='wait'){
     // A login modal can interrupt Next on the time page. Once the person has
