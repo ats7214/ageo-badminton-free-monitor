@@ -90,7 +90,8 @@ export async function scanCategory(tab,{category,facilities,startDate,outputDire
     await tab.playwright.getByRole('button',{name:'次へ進む',exact:true}).click();
     const snapshot=await ready(tab,'時間帯別空き状況');
     const selectability=await tab.playwright.getByRole('checkbox',{name:/^\d+時から\d+時まで$/}).evaluateAll(es=>es.map(e=>!e.disabled&&!e.parentElement.classList.contains('disabled')));
-    const item={snapshot,selectability,session:'guest',observedAt:new Date().toISOString(),batch:offset/10};
+    const availabilityIcons=await tab.playwright.getByRole('checkbox',{name:/^\d+時から\d+時まで$/}).evaluateAll(es=>es.map(e=>{const use=e.parentElement.querySelector('svg use');return use?.getAttribute('href')||use?.getAttribute('xlink:href')||null;}));
+    const item={snapshot,selectability,availabilityIcons,session:'guest',observedAt:new Date().toISOString(),batch:offset/10};
     observations.push(item);
     await fs.writeFile(`${outputDirectory}/${categoryKey}-${offset/10}.json`,JSON.stringify(item,null,2),'utf8');
     await tab.playwright.getByRole('button',{name:'前に戻る',exact:true}).click();

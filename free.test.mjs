@@ -15,6 +15,13 @@ const input=()=>({observations:[fixture()],coverage:[]});
 const mock=()=>({send:async()=>({id:'receipt',accepted:true}),find:async()=>null});
 const args=s=>({state:s,input:input(),today:'2026-10-24',save:async()=>{},push:mock()});
 
+test('observed status icon stays aligned with its time slot and old observations stay unknown',()=>{
+ const f=fixture();f.availabilityIcons=['dist/images/icons.svg#circle'];
+ assert.equal(candidates([f],'2026-10-24')[0].availabilityIcon,'dist/images/icons.svg#circle');
+ assert.equal(candidates([fixture()],'2026-10-24')[0].availabilityIcon,null);
+ assert.throws(()=>candidates([{...f,availabilityIcons:['#circle','#triangle']}],'2026-10-24'),/alignment/);
+});
+
 test('encrypted state round trips without exposing history',()=>{
  const value={history:'private activity',topic};const wrapped=seal(value,secret);
  assert.equal(JSON.stringify(wrapped).includes('private activity'),false);
@@ -114,3 +121,4 @@ test('real browser text may prepend previous slot status before the next date',(
  const obs=fixture('2026年11月20日');obs.snapshot+='\n- text: 12時から15時まで 2026年 11月21日 (土) 集会室兼体育室 清掃 清掃\n- checkbox "9時から12時まで"';obs.selectability.push(false);
  const slots=candidates([obs],'2026-10-24');assert.equal(slots.length,1);assert.equal(slots[0].date,'2026-11-21');assert.equal(slots[0].room,'集会室兼体育室');
 });
+

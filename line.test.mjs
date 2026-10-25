@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {lineMessages,lineClient,RESERVATION_URL,reservationMemo} from './line-push.mjs';
+import {lineMessages,lineClient,RESERVATION_URL,availabilityLabel} from './line-push.mjs';
 import {flush} from './delivery.mjs';
 const item=()=>({id:'123e4567-e89b-42d3-a456-426614174000',title:'空き通知',message:'全枠の詳細',plan:{slots:[{facility:'上平公民館',room:'体育室',date:'2026-11-21',start:18,end:22,facilityFee:3100}]}});
 const userId='U'+'1'.repeat(32),token='dummy-test-token';
@@ -14,11 +14,16 @@ test('all slots remain in text even when cards are capped at three',()=>{
  const m=lineMessages(i);assert.equal(m[0].text,i.title+'\n'+i.message);assert.equal(m[1].contents.contents.length,3);
 });
 test('notice without slots stays plain text',()=>assert.equal(lineMessages({...item(),plan:{slots:[]}}).length,1));
-test('copy actions preserve the exact slot and explain required manual navigation',()=>{
- const s=item().plan.slots[0],m=lineMessages(item()),buttons=m[1].contents.footer.contents;
- assert.equal(buttons[1].action.type,'clipboard');assert.equal(buttons[1].action.clipboardText,reservationMemo(s));
- assert.equal(buttons[2].action.clipboardText,s.date);assert.match(reservationMemo(s),/18:00〜22:00/);
- assert.match(reservationMemo(s),/公民館 → 上平公民館/);assert.equal(buttons[0].action.uri,RESERVATION_URL);
+test('card uses observed icons without guessing from selectability and removes manual route',()=>{
+ assert.equal(availabilityLabel({availabilityIcon:'dist/images/icons.svg#circle'}),'○ 空きあり');
+ assert.equal(availabilityLabel({availabilityIcon:'dist/images/icons.svg#triangle'}),'△ 施設に問い合わせ');
+ assert.equal(availabilityLabel({availabilityIcon:'dist/images/icons.svg#cross'}),'× 空きなし');
+ assert.match(availabilityLabel({selectable:true}),/未確認/);
+ assert.match(availabilityLabel({availabilityIcon:'#unexpected',selectable:true}),/未確認/);
+ const i=item();i.plan.slots[0].availabilityIcon='#circle';i.plan.slots[0].observedAt='2026-10-25T12:24:37Z';
+ const m=lineMessages(i),body=JSON.stringify(m[1].contents.body);
+ assert.match(body,/○ 空きあり/);assert.match(body,/21:24/);assert.doesNotMatch(body,/ログイン後：|表示期間/);
+ assert.equal(m[1].contents.footer.contents.length,1);
 });
 test('missing credentials fail before network',()=>{assert.throws(()=>lineClient({token:'',userId}));assert.throws(()=>lineClient({token,userId:'display-name'}));});
 test('free quota exhausted means no push request',async()=>{
@@ -62,3 +67,4 @@ test('pending LINE recipient cannot be changed after preparation',async()=>{
 test('pending ntfy send is never resent through LINE',async()=>{
  const s={outbox:[{...item(),status:'sending'}]};await assert.rejects(flush({state:s,save:async()=>{},push:lineClient({token,userId})}),/PENDING_NTFY/);
 });
+

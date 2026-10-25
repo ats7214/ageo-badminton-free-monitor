@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const HOLIDAYS = new Set(['2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23','2027-01-01','2027-01-11','2027-02-11','2027-02-23','2027-03-21','2027-03-22','2027-04-29','2027-05-03','2027-05-04','2027-05-05','2027-07-19','2027-08-11','2027-09-20','2027-09-23','2027-10-11','2027-11-03','2027-11-23']);
 export const key = s => [s.facility,s.room,s.date,s.start,s.end].join('|');
 export function parseSnapshot(observation) {
-  const {snapshot,observedAt,session='unknown',selectability=[]}=observation;
+  const {snapshot,observedAt,session='unknown',selectability=[],availabilityIcons=[]}=observation;
   if (!snapshot?.includes('heading "時間帯別空き状況"') || snapshot.includes('- dialog "エラー"')) throw Error('Valid time-detail page required; failed checks are not empty availability.');
   if(!Number.isFinite(Date.parse(observedAt))) throw Error('Observation timestamp required.');
   let facility='', date='', room='', index=0;
@@ -20,11 +20,12 @@ export function parseSnapshot(observation) {
     if(r) room=r[1].trim().replace(/"$/,'');
     const t=line.match(/^\s*- checkbox "(\d+)時から(\d+)時まで"/);
     if(!t) continue;
-    const selectable=selectability[index++];
+    const selectable=selectability[index],availabilityIcon=availabilityIcons[index++];
     if(!facility||!date||!room) throw Error('Slot missing visible facility/date/room context.');
-    slots.push({facility,room,date,start:Number(t[1]),end:Number(t[2]),observedAt,session,selectable:typeof selectable==='boolean'?selectable:null});
+    slots.push({facility,room,date,start:Number(t[1]),end:Number(t[2]),observedAt,session,availabilityIcon:availabilityIcon??null,selectable:typeof selectable==='boolean'?selectable:null});
   }
   if(selectability.length && selectability.length!==index) throw Error('Checkbox observation alignment mismatch.');
+  if(availabilityIcons.length && availabilityIcons.length!==index) throw Error('Availability icon alignment mismatch.');
   return slots;
 }
 export function wanted(s, today) {

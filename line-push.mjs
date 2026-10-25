@@ -1,16 +1,30 @@
-// Prepared LINE adapter. Not enabled in the deployed monitor until account setup
-// and a real iPhone delivery test are complete.
+// LINE adapter; optional Safari navigation assistance stays disabled by default.
 import crypto from 'node:crypto';
 const BASE='https://api.line.me/v2/bot';
 export const RESERVATION_URL='https://www.pf-yoyaku.com/User/ageo/Home';
 const uuid=/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
 const text=(value,extra={})=>({type:'text',text:String(value),wrap:true,...extra});
+export function availabilityLabel(s){
+ const icon=String(s.availabilityIcon??'').split('#')[1];
+ if(icon==='circle')return '○ 空きあり';
+ if(icon==='triangle')return '△ 施設に問い合わせ';
+ if(icon==='cross')return '× 空きなし';
+ return '記号未確認（公式画面で確認）';
+}
+export function observedLabel(s){
+ if(!Number.isFinite(Date.parse(s.observedAt)))return '確認時刻：未記録';
+ return '確認：'+new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(s.observedAt))+' 日本時間';
+}
 export function reservationMemo(s){
  const category=/市民体育館/.test(s.facility)?'市民体育館':'公民館';
  return `${s.facility} ${s.room}\n${s.date} ${s.start}:00〜${s.end}:00\n操作：${category} → ${s.facility} → 表示期間 ${s.date}・1日 → ${s.room} → ${s.start}〜${s.end}時\n予約未確定・公式サイトで最新状況を確認`;
 }
 
-export function lineMessages(item){
+export function assistedReservationUrl(s){
+ const target={v:1,f:s.facility,r:s.room,d:s.date,s:s.start,e:s.end};
+ return RESERVATION_URL+'?openExternalBrowser=1#ageo-slot='+encodeURIComponent(JSON.stringify(target));
+}
+export function lineMessages(item,{navigationAssist=false}={}){
  const slots=item.plan?.slots??[];
  const summary={type:'text',text:(item.title+'\n'+item.message).slice(0,5000)};
  if((item.title+'\n'+item.message).length>5000)throw Error('LINE_TEXT_TOO_LONG');
@@ -19,13 +33,12 @@ export function lineMessages(item){
   text('空き枠が見つかりました',{weight:'bold',color:'#06C755',size:'lg'}),
   text(s.facility+' '+s.room,{weight:'bold'}),
   text(`${s.date} ${s.start}:00〜${s.end}:00`),
+  text('予約状況：'+availabilityLabel(s),{weight:'bold',color:s.availabilityIcon?.endsWith('#circle')?'#08783E':'#805800'}),
+  text(observedLabel(s),{size:'sm',color:'#666666'}),
   text(`施設代目安：${s.facilityFee??'要確認'}${s.facilityFee==null?'':'円'}`),
-  text('6〜10人で利用予定／予約未確定・申込資格は要確認',{size:'sm',color:'#666666'}),
-  text(`ログイン後：${/市民体育館/.test(s.facility)?'市民体育館':'公民館'} → ${s.facility}\n表示期間 ${s.date}・1日 → ${s.room} → ${s.start}〜${s.end}時`,{size:'sm',color:'#444444'})
+  text('6〜10人で利用予定／予約未確定・申込資格は要確認',{size:'sm',color:'#666666'})
  ]},footer:{type:'box',layout:'vertical',spacing:'sm',contents:[
-  {type:'button',style:'primary',color:'#06C755',action:{type:'uri',label:'公式サイトを開く',uri:RESERVATION_URL}},
-  {type:'button',style:'secondary',action:{type:'clipboard',label:'施設・日時をコピー',clipboardText:reservationMemo(s)}},
-  {type:'button',style:'link',action:{type:'clipboard',label:'日付だけコピー',clipboardText:s.date}}
+  {type:'button',style:'primary',color:'#06C755',action:{type:'uri',label:navigationAssist?'この枠の申込画面へ':'公式サイトを開く',uri:navigationAssist?assistedReservationUrl(s):RESERVATION_URL}}
  ]}}));
  // Full text preserves every slot; cards show only the first three examples.
  const first=slots[0];
@@ -33,13 +46,13 @@ export function lineMessages(item){
   contents:bubbles.length===1?bubbles[0]:{type:'carousel',contents:bubbles}}];
 }
 
-export function lineClient({token,userId,fetcher=fetch,now=()=>Date.now()}){
+export function lineClient({token,userId,fetcher=fetch,now=()=>Date.now(),navigationAssist=false}){
  if(typeof token!=='string'||!token.trim()||/[\r\n]/.test(token))throw Error('LINE_TOKEN_REQUIRED');
  if(!/^U[a-f\d]{32}$/i.test(userId??''))throw Error('LINE_USER_ID_REQUIRED');
  const binding=crypto.createHash('sha256').update(userId).digest('hex');
  function prepare(item){
   if(item.line){if(item.line.binding!==binding||item.line.body.to!==userId||item.line.retryKey!==item.id)throw Error('LINE_PENDING_RECIPIENT_CHANGED');return;}
-  item.line={binding,retryKey:item.id,firstAttemptAt:new Date(now()).toISOString(),body:{to:userId,messages:lineMessages(item),notificationDisabled:false}};
+  item.line={binding,retryKey:item.id,firstAttemptAt:new Date(now()).toISOString(),body:{to:userId,messages:lineMessages(item,{navigationAssist}),notificationDisabled:false}};
  }
  async function request(path,options={}){
   return fetcher(BASE+path,{...options,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',...options.headers},signal:AbortSignal.timeout(30000)});
@@ -64,7 +77,7 @@ export function lineClient({token,userId,fetcher=fetch,now=()=>Date.now()}){
  return {
   provider:'line',quota,prepare,
   async preflight(){const account=await jsonGet('/info');await jsonGet('/profile/'+userId);return {accountName:account.displayName,...await quota()};},
-  async validate(item){const r=await request('/message/validate/push',{method:'POST',body:JSON.stringify({messages:lineMessages(item)})});if(!r.ok)throw Error('LINE_VALIDATE_HTTP_'+r.status);return true;},
+  async validate(item){const r=await request('/message/validate/push',{method:'POST',body:JSON.stringify({messages:lineMessages(item,{navigationAssist})})});if(!r.ok)throw Error('LINE_VALIDATE_HTTP_'+r.status);return true;},
   async send(item){await quota();return post(item);},
   async recover(item,firstAttemptAt){
    const age=now()-Date.parse(firstAttemptAt);
