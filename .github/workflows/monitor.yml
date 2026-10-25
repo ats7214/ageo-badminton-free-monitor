@@ -15,7 +15,10 @@ on:
         type: boolean
         default: false
   schedule:
+    # JST 08:30, hourly 09:00-23:00, and 23:30 (17 runs/day).
+    - cron: '30 23 * * *'
     - cron: '0 0-14 * * *'
+    - cron: '30 14 * * *'
 permissions:
   contents: write
 concurrency:
