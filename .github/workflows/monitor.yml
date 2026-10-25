@@ -10,6 +10,10 @@ on:
         description: 'Reprocess recent saved observations; do not access the reservation site'
         type: boolean
         default: false
+      send_test:
+        description: 'Send one production LINE card test after a successful live check'
+        type: boolean
+        default: false
   schedule:
     - cron: '0 0-14 * * *'
 permissions:
@@ -23,6 +27,9 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 50
     env:
+      NOTIFICATION_PROVIDER: ${{ vars.NOTIFICATION_PROVIDER }}
+      LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+      LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
       MONITOR_ENABLED: ${{ vars.MONITOR_ENABLED }}
       CLOUD_BROWSER_APPROVED: ${{ vars.CLOUD_BROWSER_APPROVED }}
       GITHUB_REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
@@ -45,25 +52,6 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Check availability and notify
         run: npm start
-      - name: One-time production push confirmation
-        if: github.event_name == 'workflow_dispatch' && !inputs.smoke && !inputs.reprocess
-        run: |
-          node --input-type=module <<'JS'
-          import {GithubStore} from './github-store.mjs';
-          import {notifier} from './push.mjs';
-          import {notice} from './delivery.mjs';
-          const e=process.env;
-          if(new Date().toISOString().slice(0,10)!=='2026-10-25')process.exit(0);
-          const store=await new GithubStore({repo:e.GITHUB_REPOSITORY,token:e.GITHUB_TOKEN,secret:e.STATE_KEY}).open();
-          const state=await store.load();
-          if(state.test0920?.accepted)process.exit(0);
-          if(state.health?.status!=='healthy'||state.health.sourceMode!=='live'||Date.now()-Date.parse(state.health.observedAt)>600000)throw Error('FRESH_SUCCESS_REQUIRED');
-          const push=notifier({topic:e.NTFY_TOPIC});
-          const title='上尾バドミントン 自動検索テスト完了';
-          const message='09:20予定の自動検索が完了しました。条件に合う空き'+state.health.candidateCount+'枠、新規'+state.health.newCount+'枠。予約はしていません。これは今回だけの本番通知テストです。';
-          await notice({state,fingerprint:'production-test-20261025-0920',title,message,save:s=>store.save(s),push});
-          const receipt=await push.find({title,message});
-          if(!receipt?.id)throw Error('TEST_READBACK_NOT_CONFIRMED');
-          state.test0920={accepted:true,receiptId:receipt.id,confirmedAt:new Date().toISOString()};await store.save(state);
-          console.log(JSON.stringify({event:'production_test_confirmed',receiptId:receipt.id}));
-          JS
+      - name: Confirm production LINE delivery once
+        if: github.event_name == 'workflow_dispatch' && inputs.send_test && !inputs.smoke && !inputs.reprocess
+        run: node cloud-line-test.mjs
