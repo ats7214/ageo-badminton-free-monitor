@@ -5,16 +5,17 @@ export function onlineStatus(slot,today){
  const days=Math.round((new Date(slot.date+'T00:00:00Z')-new Date(today+'T00:00:00Z'))/86400000);
  return days>=(/市民体育館/.test(slot.facility)?3:4)?'申込資格は要確認':'ネット申込締切後・窓口へ要確認';
 }
-export function messages(slots,today,createdAt){
+export function messages(slots,today,createdAt,newKeys=null){
+ const fresh=newKeys?new Set(newKeys):null;
  const groups=[];let group=[];
- const line=s=>`${s.date} ${s.start}〜${s.end}時 ${s.facility} ${s.room} ${s.facilityFee??'要確認'}円 [${onlineStatus(s,today)}]`;
+ const line=s=>`${fresh?(fresh.has(key(s))?'【新規】':'【継続】'):''}${({'circle':'○','triangle':'△','cross':'×'})[String(s.availabilityIcon??'').split('#')[1]]??'記号未確認'} ${s.date} ${s.start}〜${s.end}時 ${s.facility} ${s.room} ${s.facilityFee??'要確認'}円 [${onlineStatus(s,today)}]`;
  for(const slot of slots){
   if(Buffer.byteLength([...group,slot].map(line).join('\n'),'utf8')>2900&&group.length){groups.push(group);group=[];}
   group.push(slot);
  }
  if(group.length)groups.push(group);
- return groups.map((items,i)=>({id:crypto.randomUUID(),status:'ready',plan:{createdAt,keys:items.map(key),slots:items},
-  title:`上尾バドミントン ${items.length}枠（${i+1}/${groups.length}）`,
+ return groups.map((items,i)=>({id:crypto.randomUUID(),status:'ready',plan:{createdAt,keys:items.map(key).filter(k=>!fresh||fresh.has(k)),slots:items.map(s=>({...s,...(fresh?{isNew:fresh.has(key(s))}:{})}))},
+  title:`上尾バドミントン ${fresh?`現在の全${slots.length}枠・新規${fresh.size}枠`:items.length+'枠'}（${i+1}/${groups.length}）`,
   message:items.map(line).join('\n')+'\n6〜10人／予約未確定。タップで公式サイト。\n確認：'+createdAt}));
 }
 export async function flush({state,save,push,now=new Date()}){
@@ -49,7 +50,7 @@ export async function processInput({state,input,today,save,push,now=new Date()})
  state.history=reconcile(state.history,slots,input.coverage??[]);
  const plan=prepare(state.history,slots,now.toISOString());
  state.latest={observedAt:now.toISOString(),candidateCount:slots.length,newCount:plan.keys.length,observations:input.observations,coverage:input.coverage};
- state.outbox=messages(plan.slots,today,plan.createdAt);await save(state);
+ state.outbox=plan.keys.length?(push.provider==='line'?[{id:crypto.randomUUID(),status:'ready',fullAvailability:true,coverage:input.coverage??[],title:'施設別・全件一覧',message:'',plan:{...plan,slots:slots.map(s=>({...s,isNew:plan.keys.includes(key(s))}))}}]:messages(slots,today,plan.createdAt,plan.keys)):[];await save(state);
  await flush({state,save,push,now});
  return {candidateCount:slots.length,newCount:plan.keys.length};
 }

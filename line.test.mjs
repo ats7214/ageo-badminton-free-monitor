@@ -20,7 +20,7 @@ test('production relay keeps exact slot without credentials or default-browser q
  const c=lineClient({token,userId,navigationAssist:true,safariRelay:true});c.prepare(i);
  const action=i.line.body.messages[1].contents.footer.contents[0].action;
  const u=new URL(action.uri);assert.equal(u.origin,'https://ats7214.github.io');
- assert.equal(u.search,'');assert.equal(u.pathname,'/ageo-badminton-free-monitor/');
+ assert.match(u.search,/^\?slot=[a-f0-9]{16}$/);assert.equal(u.searchParams.has('openExternalBrowser'),false);assert.equal(u.pathname,'/ageo-badminton-free-monitor/');
  assert.deepEqual(JSON.parse(decodeURIComponent(u.hash.slice(1))),{v:1,f:slot.facility,r:slot.room,d:slot.date,s:slot.start,e:slot.end});
  assert.equal(action.label,'この枠の申込画面へ');
 });
@@ -78,3 +78,13 @@ test('pending ntfy send is never resent through LINE',async()=>{
  const s={outbox:[{...item(),status:'sending'}]};await assert.rejects(flush({state:s,save:async()=>{},push:lineClient({token,userId})}),/PENDING_NTFY/);
 });
 
+
+test('full facility report preserves all rows and every exact target within one push',()=>{
+ const slots=Array.from({length:156},(_,i)=>({facility:i%2?'原市公民館':'平方公民館',room:'集会室兼体育室',date:'2026-11-07',start:i%2?9:12,end:i%2?12:15,isNew:i===0,availabilityIcon:'#circle'}));
+ const ms=lineMessages({fullAvailability:true,plan:{slots,createdAt:'2026-10-28T11:59:16Z'}});
+ assert.ok(ms.length<=5);assert.match(ms[0].text,/全156枠/);assert.match(ms[0].text,/新規1枠/);
+ const rows=ms.slice(1).flatMap(m=>m.contents.contents).flatMap(b=>b.body.contents).filter(x=>x.action);
+ assert.equal(rows.length,156);assert.equal(rows.filter(x=>x.text.startsWith('🆕')).length,1);
+ assert.ok(ms.slice(1).every(m=>Buffer.byteLength(JSON.stringify(m.contents))<50000));
+ for(const row of rows){const u=new URL(row.action.uri);const target=JSON.parse(decodeURIComponent(u.hash.slice(1)));assert.equal(target.r,'集会室兼体育室');assert.equal(target.d,'2026-11-07');assert.match(u.search,/slot=/);}
+});

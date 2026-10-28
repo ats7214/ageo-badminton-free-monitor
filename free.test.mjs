@@ -122,3 +122,37 @@ test('real browser text may prepend previous slot status before the next date',(
  const slots=candidates([obs],'2026-10-24');assert.equal(slots.length,1);assert.equal(slots[0].date,'2026-11-21');assert.equal(slots[0].room,'集会室兼体育室');
 });
 
+
+test('new slot triggers the entire current list, labels old/new, then stays quiet',async()=>{
+ const s=state(),sent=[];const push={...mock(),send:async item=>{sent.push(structuredClone(item));return {id:'receipt-'+sent.length};}};
+ await processInput({...args(s),push});sent.length=0;
+ const two={observations:[fixture(),fixture('2026年12月20日')],coverage:[]};
+ const result=await processInput({...args(s),input:two,push});
+ assert.equal(result.newCount,1);assert.equal(result.candidateCount,2);
+ assert.equal(sent.flatMap(x=>x.plan.slots).length,2);
+ assert.equal(sent.flatMap(x=>x.plan.keys).length,1);
+ assert.match(sent.map(x=>x.message).join(''),/【新規】.*2026-12-20/);
+ assert.match(sent.map(x=>x.message).join(''),/【継続】.*2026-12-19/);
+ assert.equal(sent.flatMap(x=>x.plan.slots).filter(x=>x.isNew).length,1);
+ sent.length=0;await processInput({...args(s),input:two,push});assert.equal(sent.length,0);
+});
+
+test('all-current-list splitting omits no slots and acknowledges only new keys',()=>{
+ const slots=Array.from({length:180},(_,i)=>({facility:'平方公民館',room:'体育室',date:'2026-12-19',start:i,end:i+1}));
+ const key=s=>[s.facility,s.room,s.date,s.start,s.end].join('|');
+ const groups=messages(slots,'2026-10-28','2026-10-28T10:00:00Z',[key(slots[179])]);
+ assert.deepEqual(groups.flatMap(x=>x.plan.slots).map(key),slots.map(key));
+ assert.deepEqual(groups.flatMap(x=>x.plan.keys),[key(slots[179])]);
+ assert.ok(groups.every(x=>x.message.length<5000));
+});
+
+
+test('LINE new availability triggers one durable full snapshot with old and new rows',async()=>{
+ const s=state(),sent=[];
+ const push={provider:'line',prepare:()=>{},send:async item=>{sent.push(structuredClone(item));return {id:'line-'+sent.length};}};
+ await processInput({...args(s),push});sent.length=0;
+ await processInput({...args(s),input:{observations:[fixture(),fixture('2026年12月20日')],coverage:[]},push});
+ assert.equal(sent.length,1);assert.equal(sent[0].fullAvailability,true);
+ assert.equal(sent[0].plan.slots.length,2);assert.equal(sent[0].plan.keys.length,1);
+ assert.equal(sent[0].plan.slots.filter(x=>x.isNew).length,1);
+});

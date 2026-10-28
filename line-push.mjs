@@ -1,16 +1,11 @@
 // LINE adapter; optional Safari navigation assistance stays disabled by default.
 import crypto from 'node:crypto';
 const BASE='https://api.line.me/v2/bot';
-export const RESERVATION_URL='https://www.pf-yoyaku.com/User/ageo/Home';
+import {RESERVATION_URL,availabilityLabel,assistedReservationUrl,relayReservationUrl} from './slot-links.mjs';
+import {availabilityReport} from './availability-report.mjs';
+export {RESERVATION_URL,availabilityLabel,assistedReservationUrl,relayReservationUrl};
 const uuid=/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
 const text=(value,extra={})=>({type:'text',text:String(value),wrap:true,...extra});
-export function availabilityLabel(s){
- const icon=String(s.availabilityIcon??'').split('#')[1];
- if(icon==='circle')return '○ 空きあり';
- if(icon==='triangle')return '△ 施設に問い合わせ';
- if(icon==='cross')return '× 空きなし';
- return '記号未確認（公式画面で確認）';
-}
 export function observedLabel(s){
  if(!Number.isFinite(Date.parse(s.observedAt)))return '確認時刻：未記録';
  return '確認：'+new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(s.observedAt))+' 日本時間';
@@ -20,21 +15,14 @@ export function reservationMemo(s){
  return `${s.facility} ${s.room}\n${s.date} ${s.start}:00〜${s.end}:00\n操作：${category} → ${s.facility} → 表示期間 ${s.date}・1日 → ${s.room} → ${s.start}〜${s.end}時\n予約未確定・公式サイトで最新状況を確認`;
 }
 
-export function assistedReservationUrl(s){
- const target={v:1,f:s.facility,r:s.room,d:s.date,s:s.start,e:s.end};
- return RESERVATION_URL+'?openExternalBrowser=1#ageo-slot='+encodeURIComponent(JSON.stringify(target));
-}
-export function relayReservationUrl(s){
- const target={v:1,f:s.facility,r:s.room,d:s.date,s:s.start,e:s.end};
- return 'https://ats7214.github.io/ageo-badminton-free-monitor/#'+encodeURIComponent(JSON.stringify(target));
-}
 export function lineMessages(item,{navigationAssist=false,safariRelay=false}={}){
  const slots=item.plan?.slots??[];
+ if(item.fullAvailability)return availabilityReport(slots,{observedAt:item.plan.createdAt,coverage:item.coverage??[],testMode:false});
  const summary={type:'text',text:(item.title+'\n'+item.message).slice(0,5000)};
  if((item.title+'\n'+item.message).length>5000)throw Error('LINE_TEXT_TOO_LONG');
  if(!slots.length)return [summary];
  const bubbles=slots.slice(0,3).map(s=>({type:'bubble',body:{type:'box',layout:'vertical',spacing:'md',contents:[
-  text('空き枠が見つかりました',{weight:'bold',color:'#06C755',size:'lg'}),
+  text(s.isNew===false?'確認時点で空いている枠':'新しく見つかった空き枠',{weight:'bold',color:'#06C755',size:'lg'}),
   text(s.facility+' '+s.room,{weight:'bold'}),
   text(`${s.date} ${s.start}:00〜${s.end}:00`),
   text('この時間帯のコマ表示：'+availabilityLabel(s),{weight:'bold',color:s.availabilityIcon?.endsWith('#circle')?'#08783E':'#805800'}),
