@@ -4,6 +4,8 @@
 <script>
 'use strict';
 const note=document.querySelector('#note'),button=document.querySelector('#open');
+// Reused LINE webviews can change only the fragment: restart with the new slot.
+window.addEventListener('hashchange',()=>location.reload());
 try{
  const data=JSON.parse(decodeURIComponent(location.hash.slice(1)));
  let url;
@@ -14,7 +16,7 @@ try{
   if(halls.includes(data.f)?data.r!=='集会室兼体育室':!/^アリーナ\s*[１1][／/]\s*[２2][ＡＢAB]$/.test(data.r))throw Error('体育室の指定が正しくありません。');
   const time=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date());
   if(time<'08:30'||time>'23:50')throw Error('予約サイトの照会時間外です。08:30〜23:50に開いてください。');
-  url='https://www.pf-yoyaku.com/User/ageo/Home#ageo-slot='+encodeURIComponent(JSON.stringify({v:1,f:data.f,r:data.r,d:data.d,s:data.s,e:data.e}));
+  url='https://www.pf-yoyaku.com/User/ageo/Home?openExternalBrowser=1&ageoLaunch='+Date.now()+'#ageo-slot='+encodeURIComponent(JSON.stringify({v:1,f:data.f,r:data.r,d:data.d,s:data.s,e:data.e}));
   note.textContent=data.f+'\n'+data.d+' '+data.s+'〜'+data.e+'時';
  }
  const safari=url.replace(/^https:/,'x-safari-https:');
