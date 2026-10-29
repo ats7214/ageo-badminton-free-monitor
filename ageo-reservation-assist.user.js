@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         上尾バドミントン 予約画面アシスト
 // @namespace    ageo-badminton-free-monitor
-// @version      0.3.0
+// @version      0.4.0
 // @description  LINEの対象枠を画面で選び、申込内容入力で停止します。ログインと予約確定は本人操作です。
 // @match        https://www.pf-yoyaku.com/User/ageo/*
 // @run-at       document-idle
@@ -22,6 +22,10 @@
   if(!Number.isInteger(t.s)||!Number.isInteger(t.e)||t.s<9||t.e>22||t.s>=t.e)throw Error('通知の時間指定が正しくありません');
   if(halls.includes(t.f)?t.r!=='集会室兼体育室':!/^アリーナ\s*[１1][／/]\s*[２2][ＡＢAB]$/.test(t.r))throw Error('通知の体育室指定が正しくありません');
   return {v:1,f:t.f,r:t.r,d:t.d,s:t.s,e:t.e};
+ }
+ function gridDateMatches(text,date){
+  const m=String(text).match(/(\d{4})\s*[\/年]\s*(\d{1,2})\s*[\/月]\s*(\d{1,2})(?!\d)/);
+  return !!m&&[m[1],m[2].padStart(2,'0'),m[3].padStart(2,'0')].join('-')===date;
  }
  function link(t){return HOME+'?openExternalBrowser=1#ageo-slot='+encodeURIComponent(JSON.stringify(validate(t)));}
  function fromHash(hash){if(!hash.startsWith('#ageo-slot='))return null;return validate(JSON.parse(decodeURIComponent(hash.slice(11))));}
@@ -50,18 +54,23 @@
   }
   return {type:'stop',message:'対応していない画面のため、自動操作を停止しました。'};
  }
- const api={validate,link,fromHash,plan,normalize,TTL};
+ const api={validate,link,fromHash,plan,normalize,gridDateMatches,TTL};
  if(typeof module==='object'&&module.exports){module.exports=api;return;}
  if(window.top!==window.self||location.origin!=='https://www.pf-yoyaku.com'||!location.pathname.startsWith('/User/ageo/'))return;
+ function bootstrapIssue(message){
+  const box=document.createElement('section');box.id='ageo-reservation-assist';box.style.cssText='position:fixed;z-index:2147483647;left:8px;right:8px;bottom:8px;padding:12px;background:#fff6df;color:#332900;border:2px solid #a76a00;border-radius:12px;font:14px/1.5 sans-serif;';box.textContent=message;const close=document.createElement('button');close.textContent='閉じる';close.onclick=()=>box.remove();box.append(close);document.body.append(box);
+ }
+ // A second notification may reuse the same Safari document.
+ window.addEventListener('hashchange',()=>{if(location.hash.startsWith('#ageo-slot='))location.reload();});
  let state;
  try{
   const target=fromHash(location.hash);
   if(target){state={target,createdAt:Date.now(),paused:false};sessionStorage.setItem(KEY,JSON.stringify(state));}
   else state=JSON.parse(sessionStorage.getItem(KEY)||'null');
-  if(!state)return;
+  if(!state){if(location.pathname.endsWith('/Home'))bootstrapIssue('予約アシストは有効ですが、対象の施設・日時を受け取れていません。LINEの最新カードから開き直してください。');return;}
   validate(state.target);
   if(Date.now()-state.createdAt>TTL){sessionStorage.removeItem(KEY);return;}
- }catch{sessionStorage.removeItem(KEY);return;}
+ }catch{try{sessionStorage.removeItem(KEY);}catch{}bootstrapIssue('予約アシストが対象の施設・日時を読み込めず停止しました。Safariの通常タブでLINEの最新カードを開き直してください。');return;}
  const t=state.target;
  const panel=document.createElement('section');panel.id='ageo-reservation-assist';
  panel.style.cssText='position:fixed;z-index:2147483647;left:8px;right:8px;bottom:8px;padding:12px;background:#effff3;color:#123;border:2px solid #06a84f;border-radius:12px;font:14px/1.5 sans-serif;box-shadow:0 3px 18px #0003;';
@@ -100,8 +109,7 @@
   const row=roomRows.length===1?roomRows[0]:null;
   const dayBoxes=row?[...row.querySelectorAll('input[type="checkbox"]')].filter(visible):[];
   const day=dayBoxes.length===1?dayBoxes[0]:null;
-  const slash=t.d.replaceAll('-','/');
-  const gridMatches=!!row&&dayBoxes.length===1&&all('th').some(e=>normalize(e.textContent).includes(slash));
+  const gridMatches=!!row&&dayBoxes.length===1&&all('th').some(e=>gridDateMatches(e.textContent,t.d));
   const timeName=`${t.s}時から${t.e}時まで`;
   // A and B can share identical hours. Match the observed room container first.
   const roomGroups=all('.events-group').filter(e=>{
