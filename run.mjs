@@ -15,7 +15,7 @@ if(env.GITHUB_ACTIONS!=='true'||env.GITHUB_REPOSITORY_VISIBILITY!=='public')thro
 if(env.CLOUD_BROWSER_APPROVED!=='true')throw Error('BROWSER_METHOD_NOT_APPROVED');
 const store=await new GithubStore({repo:env.GITHUB_REPOSITORY,token:env.GITHUB_TOKEN,secret:env.STATE_KEY}).open();
 let state=await store.load();
-const seed=unseal(JSON.parse(await fs.readFile(new URL('../seed.enc.json',import.meta.url),'utf8')),env.STATE_KEY);
+const seed=unseal(JSON.parse(await fs.readFile(new URL('./seed.enc.json',import.meta.url),'utf8')),env.STATE_KEY);
 if(!state){
  state={history:seed,parserVersion:2,outbox:[],health:{status:'initializing'}};await store.save(state);
 }
