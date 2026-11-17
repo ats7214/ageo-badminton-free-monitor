@@ -15,7 +15,7 @@ if(env.GITHUB_ACTIONS!=='true'||env.GITHUB_REPOSITORY_VISIBILITY!=='public')thro
 if(env.CLOUD_BROWSER_APPROVED!=='true')throw Error('BROWSER_METHOD_NOT_APPROVED');
 const store=await new GithubStore({repo:env.GITHUB_REPOSITORY,token:env.GITHUB_TOKEN,secret:env.STATE_KEY}).open();
 let state=await store.load();
-const seed=unseal(JSON.parse(await fs.readFile(new URL('./seed.enc.json',import.meta.url),'utf8')),env.STATE_KEY);
+const seed=unseal(JSON.parse(await fs.readFile(new URL('../seed.enc.json',import.meta.url),'utf8')),env.STATE_KEY);
 if(!state){
  state={history:seed,parserVersion:2,outbox:[],health:{status:'initializing'}};await store.save(state);
 }
@@ -54,6 +54,11 @@ try{
  let detail=String(e.message).slice(0,6000);
  for(const value of [env.STATE_KEY,env.NTFY_TOPIC,env.GITHUB_TOKEN,env.LINE_CHANNEL_ACCESS_TOKEN,env.LINE_USER_ID])if(value)detail=detail.replaceAll(value,'[redacted]');
  state.health={status:'failed',fingerprint,detail,lastSuccessful:previous?.status==='healthy'?previous:previous?.lastSuccessful};
+ if(e.browserFailure){
+  let diagnostic=JSON.stringify(e.browserFailure);
+  for(const value of [env.STATE_KEY,env.NTFY_TOPIC,env.GITHUB_TOKEN,env.LINE_CHANNEL_ACCESS_TOKEN,env.LINE_USER_ID])if(value)diagnostic=diagnostic.replaceAll(value,'[redacted]');
+  state.browserFailure=JSON.parse(diagnostic);
+ }
  if(e.partial)state.partial=e.partial;
  await save(state);
  if(!smokeOnly&&!state.outbox?.length){

@@ -15,22 +15,27 @@ export async function collect({dir,env=process.env,smokeOnly=false}) {
   const browser=await chromium.launch({headless:true,chromiumSandbox:true});
   const observations=[],coverage=[],{starts,end}=periods(),today=jst().date;
   let context,page;
+  let pageErrors=[],failedRequests=[],homeStatus=null;
   async function fresh(){
     if(!inHours(new Date()))throw Error('SERVICE_CLOSED');
     if(context)await context.close();
     context=await browser.newContext({locale:'ja-JP',timezoneId:'Asia/Tokyo'});
     await context.route('https://www.pf-yoyaku.com/**',route=>inHours(new Date())?route.continue():route.abort('blockedbyclient'));
     page=await context.newPage();page.setDefaultTimeout(20000);
+    pageErrors=[];failedRequests=[];
+    page.on('pageerror',error=>{if(pageErrors.length<12)pageErrors.push(String(error.message).slice(0,1000));});
+    page.on('requestfailed',request=>{if(failedRequests.length<12){const u=new URL(request.url());failedRequests.push({path:u.origin+u.pathname,type:request.resourceType(),error:request.failure()?.errorText});}});
     page.on('dialog',async dialog=>{await dialog.dismiss();});
-    await page.goto(HOME,{waitUntil:'domcontentloaded',timeout:30000});
+    homeStatus=(await page.goto(HOME,{waitUntil:'domcontentloaded',timeout:30000}))?.status();
     return {playwright:{
       domSnapshot:()=>page.locator('body').ariaSnapshot(),
       getByRole:(...a)=>page.getByRole(...a),getByText:(...a)=>page.getByText(...a),
       getByLabel:(...a)=>page.getByLabel(...a)
     },goto:url=>page.goto(url)};
   }
-  let tab=await fresh(),recovered=false;
+  let tab,recovered=false;
   try {
+    tab=await fresh();
     let firstMonth=true;
     for(const [key,name] of (smokeOnly?facilityOrder().slice(0,1):facilityOrder())) {
       let facilityComplete=true;
@@ -68,5 +73,14 @@ export async function collect({dir,env=process.env,smokeOnly=false}) {
       if(facilityComplete)coverage.push({facility:name,start:today,end,complete:true});
     }
     return {observations,coverage};
+  }catch(error){
+    // Guest-only diagnostics go exclusively into encrypted monitor state, never public logs/artifacts.
+    try {
+      const u=new URL(page.url());
+      error.browserFailure={at:new Date().toISOString(),url:u.origin+u.pathname,homeStatus,
+        title:await page.title(),snapshot:(await page.locator('body').ariaSnapshot()).slice(0,18000),
+        pageErrors,failedRequests};
+    }catch{}
+    throw error;
   }finally{await browser.close();}
 }
