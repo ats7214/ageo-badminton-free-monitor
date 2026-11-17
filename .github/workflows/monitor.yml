@@ -27,7 +27,7 @@ concurrency:
 jobs:
   monitor:
     if: github.event.repository.visibility == 'public'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 50
     env:
       NOTIFICATION_PROVIDER: ${{ vars.NOTIFICATION_PROVIDER }}
