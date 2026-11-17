@@ -12,7 +12,8 @@ export async function collect({dir,env=process.env,smokeOnly=false}) {
   if(env.CLOUD_BROWSER_APPROVED!=='true')throw Error('CLOUD_BROWSER_METHOD_NOT_APPROVED');
   if(!inHours(new Date()))return {observations:[],coverage:[],skipped:true};
   const {chromium}=await import('playwright');
-  const browser=await chromium.launch({headless:true,chromiumSandbox:true});
+  const headed=env.BROWSER_HEADED==='true';
+  const browser=await chromium.launch({headless:!headed,chromiumSandbox:true});
   const observations=[],coverage=[],{starts,end}=periods(),today=jst().date;
   let context,page;
   let pageErrors=[],failedRequests=[],homeStatus=null,homeResponse=null;
@@ -83,7 +84,7 @@ export async function collect({dir,env=process.env,smokeOnly=false}) {
     // Guest-only diagnostics go exclusively into encrypted monitor state, never public logs/artifacts.
     try {
       const u=new URL(page.url());
-      error.browserFailure={at:new Date().toISOString(),url:u.origin==='null'?HOME:u.origin+u.pathname,homeStatus,homeResponse,browserVersion:browser.version(),browserChannel:'headless-shell',
+      error.browserFailure={at:new Date().toISOString(),url:u.origin==='null'?HOME:u.origin+u.pathname,homeStatus,homeResponse,browserVersion:browser.version(),browserChannel:headed?'headed':'headless-shell',
         title:await page.title(),snapshot:(await page.locator('body').ariaSnapshot()).slice(0,18000),
         pageErrors,failedRequests};
     }catch{}
