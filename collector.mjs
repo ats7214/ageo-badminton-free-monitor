@@ -26,7 +26,9 @@ export async function collect({dir,env=process.env,smokeOnly=false}) {
     page.on('pageerror',error=>{if(pageErrors.length<12)pageErrors.push(String(error.message).slice(0,1000));});
     page.on('requestfailed',request=>{if(failedRequests.length<12){const u=new URL(request.url());failedRequests.push({path:u.origin+u.pathname,type:request.resourceType(),error:request.failure()?.errorText});}});
     page.on('dialog',async dialog=>{await dialog.dismiss();});
-    const response=await page.goto(HOME,{waitUntil:'domcontentloaded',timeout:30000});
+    // The same fresh Home handoff URL used by the existing Safari relay.
+    const homeUrl=HOME+'?openExternalBrowser=1&ageoLaunch='+Date.now();
+    const response=await page.goto(homeUrl,{waitUntil:'domcontentloaded',timeout:30000});
     homeStatus=response?.status();
     const headers=response?.headers()??{};
     homeResponse={status:homeStatus,server:headers.server,contentType:headers['content-type'],contentLength:headers['content-length']};
