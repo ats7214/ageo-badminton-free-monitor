@@ -27,7 +27,7 @@ concurrency:
 jobs:
   monitor:
     if: github.event.repository.visibility == 'public'
-    runs-on: macos-15-intel
+    runs-on: ubuntu-22.04
     timeout-minutes: 50
     env:
       NOTIFICATION_PROVIDER: ${{ vars.NOTIFICATION_PROVIDER }}
@@ -52,7 +52,7 @@ jobs:
         run: npm test
       - name: Install Chromium
         if: vars.MONITOR_ENABLED == 'true' && vars.CLOUD_BROWSER_APPROVED == 'true' && !inputs.reprocess
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps chromium
       - name: Check availability and notify
         run: npm start
       - name: Confirm production LINE delivery once
