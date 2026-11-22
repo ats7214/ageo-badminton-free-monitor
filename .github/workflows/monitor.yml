@@ -2,6 +2,14 @@ name: Ageo free availability monitor
 on:
   workflow_dispatch:
     inputs:
+      browser:
+        description: 'Browser engine for a manual compatibility check'
+        type: choice
+        default: firefox
+        options:
+          - chromium
+          - firefox
+          - webkit
       smoke:
         description: 'One detail batch only, no slot notifications'
         type: boolean
@@ -30,6 +38,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 50
     env:
+      BROWSER_ENGINE: ${{ github.event_name == 'workflow_dispatch' && inputs.browser || 'chromium' }}
       NOTIFICATION_PROVIDER: ${{ vars.NOTIFICATION_PROVIDER }}
       LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
       LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
@@ -50,9 +59,9 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Run offline verification
         run: npm test
-      - name: Install Chromium
+      - name: Install selected browser
         if: vars.MONITOR_ENABLED == 'true' && vars.CLOUD_BROWSER_APPROVED == 'true' && !inputs.reprocess
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps "$BROWSER_ENGINE"
       - name: Check availability and notify
         run: npm start
       - name: Confirm production LINE delivery once
