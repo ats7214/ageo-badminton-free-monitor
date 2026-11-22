@@ -4,7 +4,7 @@ import {seal,unseal} from './vault.mjs';
 import {notifier} from './push.mjs';
 import {GithubStore} from './github-store.mjs';
 import {flush,messages,processInput,onlineStatus,notice} from './delivery.mjs';
-import {facilityOrder} from './collector.mjs';
+import {facilityOrder,browserSettings} from './collector.mjs';
 import {inHours,periods} from './clock.mjs';
 import {candidates} from './monitor.mjs';
 
@@ -14,6 +14,12 @@ const state=()=>({history:{delivered:{}},outbox:[]});
 const input=()=>({observations:[fixture()],coverage:[]});
 const mock=()=>({send:async()=>({id:'receipt',accepted:true}),find:async()=>null});
 const args=s=>({state:s,input:input(),today:'2026-10-24',save:async()=>{},push:mock()});
+
+test('browser comparison keeps Chromium sandbox and rejects unsupported engines',()=>{
+ assert.deepEqual(browserSettings({}),{engine:'chromium',launch:{headless:true,chromiumSandbox:true}});
+ for(const engine of ['firefox','webkit'])assert.deepEqual(browserSettings({BROWSER_ENGINE:engine}),{engine,launch:{headless:true}});
+ assert.throws(()=>browserSettings({BROWSER_ENGINE:'unknown'}),/UNSUPPORTED_BROWSER_ENGINE/);
+});
 
 test('observed status icon stays aligned with its time slot and old observations stay unknown',()=>{
  const f=fixture();f.availabilityIcons=['dist/images/icons.svg#circle'];
