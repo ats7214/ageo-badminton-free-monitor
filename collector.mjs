@@ -1,7 +1,9 @@
 import {scanCategory} from './browser-workflow.mjs';
 import {periods,jst,inHours} from './clock.mjs';
+import {lookup} from 'node:dns/promises';
 
-const HOME='https://www.pf-yoyaku.com/User/ageo/Home';
+// Use the entry linked by the city, allowing its own redirect/session bootstrap.
+const HOME='https://www.pf-yoyaku.com/User/ageo/';
 const facilities=[['haraichi','原市公民館'],['hirakata','平方公民館'],['kamihira','上平公民館'],['oishi','大石公民館'],['oya','大谷公民館'],['arena','自動車精工 上尾市民体育館（市民体育館）']];
 export function facilityOrder(now=new Date()) {
   const offset=Math.floor(now.getTime()/3600000)%facilities.length;
@@ -22,7 +24,7 @@ export async function collect({dir,env=process.env,smokeOnly=false}) {
   const browser=await drivers[engine].launch(launch);
   const observations=[],coverage=[],{starts,end}=periods(),today=jst().date;
   let context,page;
-  let pageErrors=[],failedRequests=[],homeStatus=null,homeResponse=null;
+  let pageErrors=[],failedRequests=[],homeStatus=null,homeResponse=null,dns=null;
   async function fresh(){
     if(!inHours(new Date()))throw Error('SERVICE_CLOSED');
     if(context)await context.close();
@@ -33,12 +35,13 @@ export async function collect({dir,env=process.env,smokeOnly=false}) {
     page.on('pageerror',error=>{if(pageErrors.length<12)pageErrors.push(String(error.message).slice(0,1000));});
     page.on('requestfailed',request=>{if(failedRequests.length<12){const u=new URL(request.url());failedRequests.push({path:u.origin+u.pathname,type:request.resourceType(),error:request.failure()?.errorText});}});
     page.on('dialog',async dialog=>{await dialog.dismiss();});
+    try{dns=await lookup(new URL(HOME).hostname,{all:true});}catch(e){dns={error:e.code};}
     let response;
     try{response=await page.goto(HOME,{waitUntil:'domcontentloaded',timeout:30000});}
     catch(error){throw new Error('PAGE_NOT_READY: Home navigation failed',{cause:error});}
     homeStatus=response?.status();
     const headers=response?.headers()??{};
-    homeResponse={status:homeStatus,server:headers.server,contentType:headers['content-type'],contentLength:headers['content-length']};
+    homeResponse={status:homeStatus,server:headers.server,contentType:headers['content-type'],contentLength:headers['content-length'],serverAddress:await response?.serverAddr().catch(()=>null)};
     if(homeStatus>=400)throw Error('PAGE_NOT_READY: Home HTTP '+homeStatus);
     return {playwright:{
       domSnapshot:()=>page.locator('body').ariaSnapshot(),
@@ -90,7 +93,7 @@ export async function collect({dir,env=process.env,smokeOnly=false}) {
     // Guest-only diagnostics go exclusively into encrypted monitor state, never public logs/artifacts.
     try {
       const u=new URL(page.url());
-      error.browserFailure={at:new Date().toISOString(),url:u.origin==='null'?HOME:u.origin+u.pathname,homeStatus,homeResponse,browserVersion:browser.version(),browserEngine:engine,
+      error.browserFailure={at:new Date().toISOString(),entryUrl:HOME,dns,url:u.origin==='null'?HOME:u.origin+u.pathname,homeStatus,homeResponse,browserVersion:browser.version(),browserEngine:engine,
         title:await page.title(),snapshot:(await page.locator('body').ariaSnapshot()).slice(0,18000),
         pageErrors,failedRequests};
     }catch{}
