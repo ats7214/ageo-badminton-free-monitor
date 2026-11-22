@@ -2,6 +2,10 @@ name: Ageo free availability monitor
 on:
   workflow_dispatch:
     inputs:
+      line_diagnostic:
+        description: 'Verify LINE independently and send the once-only diagnostic'
+        type: boolean
+        default: false
       browser:
         description: 'Browser engine for a manual compatibility check'
         type: choice
@@ -62,6 +66,9 @@ jobs:
       - name: Install selected browser
         if: vars.MONITOR_ENABLED == 'true' && vars.CLOUD_BROWSER_APPROVED == 'true' && !inputs.reprocess
         run: npx playwright install --with-deps "$BROWSER_ENGINE"
+      - name: Verify independent LINE connection once
+        if: github.event_name == 'workflow_dispatch' && inputs.line_diagnostic
+        run: node cloud-line-diagnostic.mjs
       - name: Check availability and notify
         run: npm start
       - name: Confirm production LINE delivery once
